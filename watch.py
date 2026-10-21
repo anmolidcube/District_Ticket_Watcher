@@ -84,8 +84,11 @@ def main():
             try:
                 page.goto(CONTROL_URL, wait_until="domcontentloaded", timeout=45000)
                 page.wait_for_timeout(5000)
-                c = page.inner_text("body").lower().count(LIVE_WORD)
-                print(f"CONTROL (live movie): count={c}")
+                body = page.inner_text("body")
+                c = body.lower().count(LIVE_WORD)
+                print(f"CONTROL (live movie): count={c} drishyam_in_page={'drishyam' in body.lower()} url={page.url}")
+                print("CONTROL TEXT START\n" + body[:1500] + "\nCONTROL TEXT END")
+                page.screenshot(path="control.png")
                 if c == 0:
                     notify(topic, "WARNING: detection may not work",
                            "Control page (already bookable) shows 0 'book tickets' from GitHub. "
