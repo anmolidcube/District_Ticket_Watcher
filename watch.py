@@ -8,6 +8,7 @@ import os, sys, datetime, urllib.request
 from playwright.sync_api import sync_playwright
 
 LIVE_WORD = "book tickets"
+CONTROL_URL = "https://district.in/movies/drishyam-the-conclusion-movie-tickets-MV207254"
 
 # baseline = how many times "book tickets" appears on the page while booking is CLOSED.
 # Alert fires when the count goes ABOVE it. Use the "baseline=" value your local script printed.
@@ -17,14 +18,14 @@ MOVIES = [
         "name": "Avengers: Doomsday",
         "url": "https://district.in/movies/avengers-doomsday-movie-tickets-MV176735",
         "must": "avengers",
-        "baseline": 1,
+        "baseline": 0,             # GitHub's run saw count=0 while booking is closed
         "topic_env": "NTFY_TOPIC_DOOMSDAY",
     },
     {
         "name": "Godzilla Minus Zero",
         "url": "https://www.district.in/movies/godzilla-minus-zero-movie-tickets-MV219297",
         "must": "godzilla",
-        "baseline": None,          # <-- replace with the number your Godzilla script printed
+        "baseline": 0,             # GitHub's run saw count=0 while booking is closed
         "topic_env": "NTFY_TOPIC_GODZILLA",
     },
 ]
@@ -45,7 +46,7 @@ def notify(topic, title, msg, priority="default", click=None):
 
 
 def main():
-    ist = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
+    ist = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5, minutes=30)
     manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
     heartbeat = manual or (ist.hour % 6 == 0 and ist.minute < 10)   # about every 6 hours
     any_error = False
@@ -76,6 +77,23 @@ def main():
                 print(f"{m['name']}: ERROR {e}")
                 if heartbeat:
                     notify(topic, "Watcher error", f"{m['name']}: {str(e)[:100]}", "default")
+        # Control check: a movie that IS bookable right now. If GitHub's servers see
+        # zero "book tickets" there, detection from GitHub is broken (e.g. region/blocking).
+        if heartbeat:
+            topic = os.environ.get("NTFY_TOPIC_DOOMSDAY", "")
+            try:
+                page.goto(CONTROL_URL, wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_timeout(5000)
+                c = page.inner_text("body").lower().count(LIVE_WORD)
+                print(f"CONTROL (live movie): count={c}")
+                if c == 0:
+                    notify(topic, "WARNING: detection may not work",
+                           "Control page (already bookable) shows 0 'book tickets' from GitHub. "
+                           "Alerts may be missed.", "high")
+                else:
+                    notify(topic, "Detection check OK", f"Control live movie shows count={c}", "low")
+            except Exception as e:
+                print("CONTROL ERROR", e)
         browser.close()
     sys.exit(1 if any_error else 0)
 
