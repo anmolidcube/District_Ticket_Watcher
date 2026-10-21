@@ -1,105 +1,50 @@
 #!/usr/bin/env python3
 """
-GitHub Actions watcher: checks District pages and sends ntfy alerts.
-Runs once per invocation (the workflow schedules it every 10 minutes).
-Topic names come from GitHub secrets, never from this file.
+TEST version: watches a movie that is ALREADY bookable (Drishyam), with the
+baseline forced to 0, so the loud "TICKETS LIVE" alert should fire on the first check.
+If you get the alert on your phone, detection + notifications both work.
+
+Run:  python ticket_watch_test.py
 """
-import os, sys, datetime, urllib.request
+import time, urllib.request
 from playwright.sync_api import sync_playwright
 
+NTFY_TOPIC = "Anmol_Godzilla"      # change to your Doomsday topic if you prefer
+URL = "https://district.in/movies/drishyam-the-conclusion-movie-tickets-MV207254"
+MOVIE_NAME = "drishyam"
 LIVE_WORD = "book tickets"
-CONTROL_URL = "https://district.in/movies/drishyam-the-conclusion-movie-tickets-MV207254"
-
-# baseline = how many times "book tickets" appears on the page while booking is CLOSED.
-# Alert fires when the count goes ABOVE it. Use the "baseline=" value your local script printed.
-# Set to None to only report the count in the status message (no live alerts).
-MOVIES = [
-    {
-        "name": "Avengers: Doomsday",
-        "url": "https://district.in/movies/drishyam-the-conclusion-movie-tickets-MV207254",
-        "must": "avengers",
-        "baseline": 0,             # GitHub's run saw count=0 while booking is closed
-        "topic_env": "NTFY_TOPIC_DOOMSDAY",
-    },
-    {
-        "name": "Godzilla Minus Zero",
-        "url": "https://www.district.in/movies/godzilla-minus-zero-movie-tickets-MV219297",
-        "must": "godzilla",
-        "baseline": 0,             # GitHub's run saw count=0 while booking is closed
-        "topic_env": "NTFY_TOPIC_GODZILLA",
-    },
-]
+BASELINE = 0                       # forced to 0 for the test
 
 
-def notify(topic, title, msg, priority="default", click=None):
-    if not topic:
-        print("no topic set, skipping notify:", title)
-        return
+def notify(title, msg, priority="default", click=None):
     headers = {"Title": title.encode("utf-8"), "Priority": priority}
     if click:
         headers["Click"] = click
-    req = urllib.request.Request(f"https://ntfy.sh/{topic}", data=msg.encode("utf-8"), headers=headers)
+    req = urllib.request.Request(f"https://ntfy.sh/{NTFY_TOPIC}", data=msg.encode("utf-8"), headers=headers)
     try:
         urllib.request.urlopen(req, timeout=15)
     except Exception as e:
         print("notify failed:", e)
 
 
-def main():
-    ist = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5, minutes=30)
-    manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
-    heartbeat = manual or (ist.hour % 6 == 0 and ist.minute < 10)   # about every 6 hours
-    any_error = False
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page(locale="en-IN", timezone_id="Asia/Kolkata")
-        for m in MOVIES:
-            topic = os.environ.get(m["topic_env"], "")
-            try:
-                page.goto(m["url"], wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(5000)
-                text = page.inner_text("body").lower()
-                if m["must"] not in text:
-                    raise RuntimeError("page did not load properly")
-                count = text.count(LIVE_WORD)
-                base = m["baseline"]
-                live = base is not None and count > base
-                print(f"{m['name']}: count={count} baseline={base} live={live}")
-                if live:
-                    notify(topic, f"🎟 {m['name'].upper()} TICKETS LIVE on District!",
-                           "Booking looks open. Go book!", "urgent", m["url"])
-                elif heartbeat:
-                    notify(topic, "Still watching",
-                           f"{m['name']}: not live | count={count} baseline={base} | {ist:%H:%M} IST", "low")
-            except Exception as e:
-                any_error = True
-                print(f"{m['name']}: ERROR {e}")
-                if heartbeat:
-                    notify(topic, "Watcher error", f"{m['name']}: {str(e)[:100]}", "default")
-        # Control check: a movie that IS bookable right now. If GitHub's servers see
-        # zero "book tickets" there, detection from GitHub is broken (e.g. region/blocking).
-        if heartbeat:
-            topic = os.environ.get("NTFY_TOPIC_DOOMSDAY", "")
-            try:
-                page.goto(CONTROL_URL, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(5000)
-                body = page.inner_text("body")
-                c = body.lower().count(LIVE_WORD)
-                print(f"CONTROL (live movie): count={c} drishyam_in_page={'drishyam' in body.lower()} url={page.url}")
-                print("CONTROL TEXT START\n" + body[:1500] + "\nCONTROL TEXT END")
-                page.screenshot(path="control.png")
-                if c == 0:
-                    notify(topic, "WARNING: detection may not work",
-                           "Control page (already bookable) shows 0 'book tickets' from GitHub. "
-                           "Alerts may be missed.", "high")
-                else:
-                    notify(topic, "Detection check OK", f"Control live movie shows count={c}", "low")
-            except Exception as e:
-                print("CONTROL ERROR", e)
-        browser.close()
-    sys.exit(1 if any_error else 0)
-
-
-if __name__ == "__main__":
-    main()
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page(locale="en-IN", timezone_id="Asia/Kolkata")
+    page.goto(URL, wait_until="domcontentloaded", timeout=45000)
+    page.wait_for_timeout(5000)
+    text = page.inner_text("body").lower()
+    if MOVIE_NAME not in text or "access denied" in text:
+        print("PAGE DID NOT LOAD PROPERLY (blocked?). First 300 chars:\n", text[:300])
+        notify("TEST: page failed to load", "Blocked or not loaded. Detection untested.", "default")
+    else:
+        count = text.count(LIVE_WORD)
+        print(f"count of '{LIVE_WORD}' = {count}, baseline = {BASELINE}")
+        if count > BASELINE:
+            print("LIVE detected -> sending alerts")
+            for _ in range(3):
+                notify("🎟 TEST: TICKETS LIVE on District!", "This is a TEST alert (Drishyam). Detection works!", "urgent", URL)
+                time.sleep(30)
+        else:
+            print("NOT detected: count is not above baseline. Detection needs fixing.")
+            notify("TEST: not detected", f"count={count}. Button text may differ.", "default")
+    browser.close()
