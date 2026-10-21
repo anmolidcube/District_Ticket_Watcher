@@ -16,7 +16,7 @@ CONTROL_URL = "https://district.in/movies/drishyam-the-conclusion-movie-tickets-
 MOVIES = [
     {
         "name": "Avengers: Doomsday",
-        "url": "https://district.in/movies/avengers-doomsday-movie-tickets-MV176735",
+        "url": "https://district.in/movies/drishyam-the-conclusion-movie-tickets-MV207254",
         "must": "avengers",
         "baseline": 0,             # GitHub's run saw count=0 while booking is closed
         "topic_env": "NTFY_TOPIC_DOOMSDAY",
