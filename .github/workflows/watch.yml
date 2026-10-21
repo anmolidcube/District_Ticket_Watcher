@@ -2,7 +2,7 @@ name: Ticket watcher
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may delay runs a bit)
+    - cron: "*/5 * * * *"    # every 5 minutes (GitHub may delay or skip some runs)
   workflow_dispatch:          # lets you run it by hand from the Actions tab
 
 jobs:
