@@ -1,0 +1,25 @@
+name: Ticket watcher
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (GitHub may delay runs a bit)
+  workflow_dispatch:          # lets you run it by hand from the Actions tab
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+      - name: Run watcher
+        env:
+          NTFY_TOPIC_DOOMSDAY: ${{ secrets.NTFY_TOPIC_DOOMSDAY }}
+          NTFY_TOPIC_GODZILLA: ${{ secrets.NTFY_TOPIC_GODZILLA }}
+        run: python watch.py
