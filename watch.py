@@ -10,7 +10,7 @@ import time, urllib.request
 from playwright.sync_api import sync_playwright
 
 NTFY_TOPIC = "Anmol_Godzilla"      # change to your Doomsday topic if you prefer
-URL = "https://district.in/movies/drishyam-the-conclusion-movie-tickets-MV207254"
+URL = "https://www.district.in/movies/drishyam-the-conclusion-movie-tickets-MV207254"
 MOVIE_NAME = "drishyam"
 LIVE_WORD = "book tickets"
 BASELINE = 0                       # forced to 0 for the test
