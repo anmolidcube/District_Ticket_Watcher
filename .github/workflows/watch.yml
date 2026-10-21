@@ -23,3 +23,10 @@ jobs:
           NTFY_TOPIC_DOOMSDAY: ${{ secrets.NTFY_TOPIC_DOOMSDAY }}
           NTFY_TOPIC_GODZILLA: ${{ secrets.NTFY_TOPIC_GODZILLA }}
         run: python watch.py
+      - name: Upload debug screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-screenshot
+          path: control.png
+          if-no-files-found: ignore
